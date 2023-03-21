@@ -1,38 +1,18 @@
-#![no_std]
-#![no_main]
-#![feature(custom_test_frameworks)]
-#![test_runner(bit_kernel::test_runner)]
-#![reexport_test_harness_main = "test_main"]
+fn main() {
+    // read env variables that were set in build script
+    let uefi_path = env!("UEFI_PATH");
+    let bios_path = env!("BIOS_PATH");
+    
+    // choose whether to start the UEFI or BIOS image
+    let uefi = true;
 
-use core::panic::PanicInfo;
-use bit_kernel::println;
-
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    println!("Hello World{}", "!");
-    bit_kernel::init();
-    fn stack_overflow() {
-        stack_overflow(); // for each recursion, the return address is pushed
+    let mut cmd = std::process::Command::new("qemu-system-x86_64");
+    if uefi {
+        cmd.arg("-bios").arg(ovmf_prebuilt::ovmf_pure_efi());
+        cmd.arg("-drive").arg(format!("format=raw,file={uefi_path}"));
+    } else {
+        cmd.arg("-drive").arg(format!("format=raw,file={bios_path}"));
     }
-
-    // trigger a stack overflow
-    stack_overflow();
-    #[cfg(test)]
-    test_main();
-    println!("It did not crash!");
-    loop {}
-}
-
-/// This function is called on panic.
-#[cfg(not(test))]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
-    loop {}
-}
-
-#[cfg(test)]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    bit_kernel::test_panic_handler(info)
+    let mut child = cmd.spawn().unwrap();
+    child.wait().unwrap();
 }
